@@ -276,7 +276,7 @@ camels_test  <- testing(camels_split)
 camels_cv <- vfold_cv(camels_train, v = 10)
 ```
 
-## Preprocessor: recipe
+  ## Preprocessor: recipe
 In lecture, we have focused on using formulas as a workflow preprocessor. Separately we have used the recipe function to define a series of data preprocessing steps. Here, we are going to use the recipe function to define a series of data preprocessing steps.
 
 We learned quite a lot about the data in the visual EDA. We know that the q_mean, aridity and p_mean columns are right skewed and can be helped by log transformations. We also know that the relationship between aridity and p_mean is non-linear and can be helped by adding an interaction term to the model. To implement these, lets build a recipe!
@@ -327,7 +327,7 @@ We have to be careful about how we do this with the base R approach:
 To correctly evaluate the model on the test data, we need to apply the same preprocessing steps to the test data that we applied to the training data. We can do this using the prep and bake functions with the recipe object. This ensures the test data is transformed in the same way as the training data before making predictions.
 
 ```{r, echo = TRUE}
-test_data <-  bake(prep(rec), new_data = camels_test)
+test_data <- bake(prep(rec), new_data = camels_test)
 test_data$lm_pred <- predict(lm_base, newdata = test_data)
 ```
 
@@ -371,7 +371,7 @@ lm_wf <- workflow() %>%
   # Add the model
   add_model(lm_model) %>%
   # Fit the model to the training data
-  fit(data = camels_train) d
+  fit(data = camels_train)
 
 # Extract the model coefficients from the workflow
 summary(extract_fit_engine(lm_wf))$coefficients
@@ -417,40 +417,239 @@ The real power of this approach is that we can easily switch out the models/reci
 
 
 ```{r, echo = TRUE}
+library(baguette)
+rf_model <- rand_forest() %>%
+  set_engine("ranger", importance = "impurity") %>%
+  set_mode("regression")
 
+rf_wf <- workflow() %>%
+  # Add the recipe
+  add_recipe(rec) %>%
+  # Add the model
+  add_model(rf_model) %>%
+  # Fit the model
+  fit(data = camels_train) 
+
+```
+
+## Predictions
+
+Make predictions on the test data using the augment function and the new_data argument.
+
+```{r, echo = TRUE}
+rf_data <- augment(rf_wf, new_data = camels_test)
+dim(rf_data)
+```
+## Model Evaluation: statistical and visual
+Evaluate the model using the metrics function and create a scatter plot of the observed vs predicted values, colored by aridity.
+
+```{r, echo = TRUE}
+metrics(rf_data, truth = logQmean, estimate = .pred)
+```
+
+
+```{r, echo = TRUE}
+ggplot(rf_data, aes(x = logQmean, y = .pred, colour = aridity)) +
+  scale_color_viridis_c() +
+  geom_point() +
+  geom_abline() +
+  theme_linedraw()
+
+```
+Awesome! We just set up a completely new model and were able to utilize all of the things we had done for the linear model. This is the power of the tidymodels framework!
+
+That said, we still can reduce some to the repetition. Further, we are not really able to compare these models to one another as they
+
+## A workflowset approach
+
+workflow_set is a powerful tool for comparing multiple models on the same data. It allows you to define a set of workflows, fit them to the same data, and evaluate their performance using a common metric. Here, we are going to create a workflow_set object with the linear regression and random forest models, fit them to the training data, and compare their performance using the autoplot and rank_results functions.
+
+```{r, echo = TRUE}
+wf <- workflow_set(list(rec), list(lm_model, rf_model)) %>%
+  workflow_map('fit_resamples', resamples = camels_cv) 
+
+autoplot(wf)
 
 ```
 
 ```{r, echo = TRUE}
-
-
+rank_results(wf, rank_metric = "rsq", select_best = TRUE)
 ```
+Overall it seems the random forest model is outperforming the linear model. This is not surprising given the non-linear relationship between the predictors and the outcome :)
+
+# Question 3: Your Turn! (20 points)
+
+#### Build a xgboost (engine) regression (mode) model using boost_tree
+#### Build a neural network model using the nnet engine from the baguette package using the bag_mlp function
 
 
 ```{r, echo = TRUE}
+library(parsnip)
+xgboost_model <- boost_tree() %>% 
+  set_engine("xgboost") %>% 
+  set_mode("regression")
 
+library(baguette)
+library(xgboost)
+nnet_model <- bag_mlp() %>% 
+  set_engine("nnet") %>% 
+  set_mode("regression")
 
 ```
+
+
+#### Add this to the above workflow
+```{r, echo = TRUE}
+wf <- workflow_set(list(rec), list(lm_model, rf_model, xgboost_model, nnet_model)) %>%
+  workflow_map('fit_resamples', resamples = camels_cv)
+
+autoplot(wf)
+
+```
+
+#### Evaluate the model and compare it to the linear and random forest models. Of the 4 models would you move forward with?
 
 
 ```{r, echo = TRUE}
+rank_results(wf, rank_metric = "rsq", select_best = TRUE)
+```
+
+The xgboost model has the highest root mean squared error and the lowest r squared, so that one's out. The model with the highest r squared (closest to the most accurate value of 1) is the nerual network model, which also has the lowest root mean squared errror. Out of the four models tested, this one works best, even though it's less explainable. predicting streamflow doesn't necessarily have to be explainable, just as accurate as possible so people can know how to best use water rights based on predictions.
+
+#### Build your own (75 points)
+
+Borrowing from the workflow presented above, build your own complete ML pipeline to predict mean streamflow using the CAMELS dataset. You can experiment with different predictors and preprocessing steps to see how they impact model performance. A successful model will have a R-squared value > 0.9. To get started, you can use the following steps as a template:
+
+## Data Splitting (15)
+
+#### Set a seed for reproducible
+
+```{r, echo = TRUE}
+set.seed(295)
+```
+
+#### Create an initial split with 75% used for training and 25% for testing
+
+```{r, echo = TRUE}
+camels_split2 <- initial_split(camels, prop = 0.75)
+
+```
+
+#### Extract your training and testing sets. Build a 10-fold CV dataset as well
+
+```{r, echo = TRUE}
+camels_train2 <- training(camels_split2)
+camels_test2  <- testing(camels_split2)
+
+#ten-fold cross-validation dataset
+camels_cv2 <- vfold_cv(camels_train2, v = 10)
+
+```
+
+## Recipe (15)
+
+#### Define a formula you want to use to predict logQmean
+
+#### Build a recipe that you feel handles the predictors chosen well
+
+```{r, echo = TRUE}
+#here i was wondering if it would be worthwhile to try to plot all of these variables, or if it's better to make them a part of the model and just see if it works.
+
+rec2 <-  recipe(logQmean ~ aridity + p_mean + high_prec_freq + low_prec_freq + high_prec_dur + lai_max + water_frac + slope_mean, data = camels_train) %>%
+  # Log transform the predictor variables (aridity and p_mean)
+  #step_log(all_predictors()) %>%
+  # Add an interaction term between aridity and p_mean
+step_interact(terms = ~ aridity:p_mean + aridity:lai_max + p_mean:low_prec_freq + high_prec_freq:low_prec_freq + low_prec_freq:aridity) |> 
+  # Drop any rows with missing values in the pred
+  step_naomit(all_predictors(), all_outcomes())
 
 
 ```
+#### Describe in words why you are choosing the formula you are. Consult the downloaded PDF for the data to help you make this decision.
+
+* I chose high_prec_freq (high precipitation frequency) because it's distant enough from p_mean to be a different concept.
+* low_prec_freq will reflect droughts frequency, which will be directly related to average streamflow for at least part of the season
+* high_prec_dur will greatly weigh into average sreamflow because it describes how often events 9x the median flow occur.
+* lai_max is an ecological predictor that assumes in areas with broad leaves there is more available moisture in the environment, which should increase streamflow
+* fraction of the top 1.5m of soil marked as water- this should be positively correlated with streamflow if there is an overall higher water table
+*slope_mean should contribute to streamflow because a higher slope will increase velocity
+
+Since there are so many terms, I am not going to try to visualize all of them. I will run the model and see if it works. I am curious about which terms interact though, so I think I'll make a correlation table.
+
+```{r, echo = TRUE}
+camels |> 
+  select(aridity, p_mean, q_mean, high_prec_freq, low_prec_freq, high_prec_dur, lai_max, soil_conductivity, water_frac) |> 
+  drop_na() |> 
+  cor()
+
+```
+
+
+#### Define 3 models (25)
 
 ```{r, echo = TRUE}
 
+#random forest with ranger and regression
+library(baguette)
+rf_model <- rand_forest() %>%
+  set_engine("ranger", importance = "impurity") %>%
+  set_mode("regression")
+
+#I will be using the neural network model and xgboost
 
 ```
 
+
+#### workflow set ()
 ```{r, echo = TRUE}
+wf2 <- workflow_set(list(rec2), list(lm_model, rf_model, nnet_model, xgboost_model)) %>%
+  workflow_map('fit_resamples', resamples = camels_cv2) 
 
+autoplot(wf2)
 
+rank_results(wf2, rank_metric = "rsq", select_best = TRUE)
 ```
+Boost_tree did the best with an r squared of.89, followed by rand_forest at .88, according to the autoplot. I think these tree-based models did better because there wasn't a lot of data to go by, allowing for more accurate modeling with decision trees. Boost_tree builds sequentially, while random forests build parallel. The sequential building was slightly better.
 
+## Extact and Evaluate
+
+Now that you found your favorite model, lets see how it does on the test data!
+
+#### Build a workflow (not workflow set) with your favorite model, recipe, and training data
+#### Use fit to fit all training data to the model
 ```{r, echo = TRUE}
+boostflow <- workflow() %>%
+  # Add the recipe
+  add_recipe(rec2) %>%
+  # Add the model
+  add_model(xgboost_model) %>%
+  # Fit the model to the training data
+  fit(data = camels_train2)
+```
 
+#### Use augment to make predictions on the test data
+```{r, echo = TRUE}
+boostflow_data <- augment(boostflow, new_data = camels_test2)
+dim(boostflow_data)
 
 ```
 
+#### Create a plot of the observed vs predicted values with clear title, axis labels, and a compelling color scale
+```{r, echo = TRUE}
+ggplot(boostflow_data, aes(x = logQmean, y = .pred)) +
+  geom_point() +
+  geom_abline() +
+  theme_linedraw() +
+  labs(
+    y = "Predictor variables",
+    x = "Streamflow",
+    title = "Boosted Forest Prediction model"
+  )
+
+```
+
+
+#### Describe what you think of the results!
+
+The line of best fit is much more accurate at higher log streamflow, but at lower streamflow the values are more spread out. It appears as though since the R^2 converges, there might be more interacting variables I wasn't catching at first. 
 
