@@ -1,64 +1,9 @@
 ---
-title: 'Lab 6: Machine Learning in Hydrology'
+title: 'Index'
 output-dir: docs
 format:
    html:
     code-fold: true
     toc: true
-subtitle: 'Using Tidymodels & CAMELS Data'
 ---
-
-tidymodels is an R framework designed for machine learning and statistical modeling. Built on the principles of the tidyverse, tidymodels provides a consistent and modular approach to tasks like data preprocessing, model training, evaluation, and validation. By leveraging the strengths of packages such as recipes, parsnip, and yardstick, tidymodels streamlines the modeling workflow, making it easier to experiment with different models while maintaining reproducibility and interpretability.
-
-loading packages for analysis
-```{r, echo = TRUE}
-library(tidymodels)
-library(ggplot2)
-library(ggpubr)
-library(visdat)
-library(sf)
-library(parsnip)
-library(recipes)
-library(yardstick)
-library(tidyverse)
-
-
-library(powerjoin)
-library(glue)
-library(vip)
-library(baguette)
-
-```
-
-
-Why the hype about stream data?
-This is a large dataset that's helped to enhance deep learning and model tuning while being a tool for understanding model behavior. It facilitates large-scale model comparisons and allows for hybrid models that combine physics based models with machine learning.
-
-
-What’s in the data?
-Each record in the CAMELS dataset represents a unique river basin, identified by an outlet USGS NWIS gauge_id. The dataset contains a mix of continuous and categorical variables, including meteorological, catchment, and streamflow summaries.
-
-The data we are going to downloaded are the basin level summaries. For example, if we looked at row 1 of the data (Gage: 01013500) all of the values are the areal average for the drainage basin seen below, while the flow metrics are associated with the outlet gage (in red).
-
-
-```{r, echo = TRUE}
-
-
-basin <- dataRetrieval::findNLDI(nwis = "01013500", 
-# Navigate the "upper tributaries" of the basin
-nav = "UT", 
- # Return the basin and flowlines
-find = c("basin", "flowlines"))
-
-# Plot the basin, flowlines, and gauge ...
-ggplot() + 
-  geom_sf(data = basin$basin, fill = "lightblue") + 
-  geom_sf(data = basin$UT_flowlines, color = "blue") + 
-  geom_sf(data = basin$origin, color = "red", size = 2) + 
-  theme_minimal()
-
-```
-
-
-
 

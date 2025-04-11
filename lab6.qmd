@@ -1,6 +1,6 @@
 ---
 title: 'Lab 6: Machine Learning in Hydrology'
-output-dir: docs
+output-directory: docs
 format:
    html:
     code-fold: true
@@ -110,7 +110,11 @@ ggplot(data = camels, aes(x = gauge_lon, y = gauge_lat)) +
   borders("state", colour = "gray50") +
   geom_point(aes(color = q_mean)) +
   scale_color_gradient(low = "pink", high = "dodgerblue") +
-  ggthemes::theme_map()
+  ggthemes::theme_map() +
+  labs(
+    title = "Mean Streamflow Across the US",
+    color = "Mean Streamflow q"
+  )
 
 ```
 
@@ -609,7 +613,7 @@ autoplot(wf2)
 
 rank_results(wf2, rank_metric = "rsq", select_best = TRUE)
 ```
-Boost_tree did the best with an r squared of.89, followed by rand_forest at .88, according to the autoplot. I think these tree-based models did better because there wasn't a lot of data to go by, allowing for more accurate modeling with decision trees. Boost_tree builds sequentially, while random forests build parallel. The sequential building was slightly better.
+The random forest did the best with an r squared of.89, followed by rand_forest at .88, according to the autoplot. I think these tree-based models did better because there wasn't a lot of data to go by, allowing for more accurate modeling with decision trees. Boost_tree builds sequentially, while random forests build parallel. The sequential building was slightly better.
 
 ## Extact and Evaluate
 
@@ -618,25 +622,25 @@ Now that you found your favorite model, lets see how it does on the test data!
 #### Build a workflow (not workflow set) with your favorite model, recipe, and training data
 #### Use fit to fit all training data to the model
 ```{r, echo = TRUE}
-boostflow <- workflow() %>%
+randflow <- workflow() %>%
   # Add the recipe
   add_recipe(rec2) %>%
   # Add the model
-  add_model(xgboost_model) %>%
+  add_model(rf_model) %>%
   # Fit the model to the training data
   fit(data = camels_train2)
 ```
 
 #### Use augment to make predictions on the test data
 ```{r, echo = TRUE}
-boostflow_data <- augment(boostflow, new_data = camels_test2)
-dim(boostflow_data)
+randflow_data <- augment(randflow, new_data = camels_test2)
+dim(randflow_data)
 
 ```
 
 #### Create a plot of the observed vs predicted values with clear title, axis labels, and a compelling color scale
 ```{r, echo = TRUE}
-ggplot(boostflow_data, aes(x = logQmean, y = .pred)) +
+ggplot(randflow_data, aes(x = logQmean, y = .pred)) +
   geom_point() +
   geom_abline() +
   theme_linedraw() +
