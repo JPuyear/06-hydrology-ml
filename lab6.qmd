@@ -1,11 +1,15 @@
 ---
 title: 'Lab 6: Machine Learning in Hydrology'
-output-directory: docs
-format:
-   html:
-    code-fold: true
-    toc: true
 subtitle: 'Using Tidymodels & CAMELS Data'
+date: "2025-04-10"
+author: 
+  name: Josh Puyear
+  email: "puyearjosh@gmail.com" 
+project:
+ output-dir: docs
+format: html
+execute:
+  echo: true
 ---
 
 tidymodels is an R framework designed for machine learning and statistical modeling. Built on the principles of the tidyverse, tidymodels provides a consistent and modular approach to tasks like data preprocessing, model training, evaluation, and validation. By leveraging the strengths of packages such as recipes, parsnip, and yardstick, tidymodels streamlines the modeling workflow, making it easier to experiment with different models while maintaining reproducibility and interpretability.
@@ -158,14 +162,12 @@ precip_map <- ggplot(data = camels, aes(x = gauge_lon, y = gauge_lat)) +
 
 ```
 
-#### Ensure these render as a single image with your choice of facet_*, patchwork, or ggpubr
+#### Ensure these render as a single image with your choice of facet\_\*, patchwork, or ggpubr
 
 ```{r, echo = TRUE}
 library(patchwork)
 aridity_map+precip_map
 ```
-
-
 
 ## Model Preparation
 
@@ -208,7 +210,7 @@ ggplot(camels, aes(x = aridity, y = p_mean)) +
 
 By showing an x-y axis and color, it is possible for two variables to predict a third. These three dimensions can explain what's happening with streamflow. At this point, we're just showing what's happening in the available data.
 
-So it looks like there is a relationship between rainfall, aridity, and rainfall but it looks like an exponential decay function and is certainly not linear.
+So it looks like there is a relationship between precipitation, aridity, and rainfall but it looks like an exponential decay function and is certainly not linear.
 
 To test a transformation, we can log transform the x and y axes using the scale_x_log10() and scale_y_log10() functions:
 
@@ -224,7 +226,7 @@ ggplot(camels, aes(x = aridity, y = p_mean)) +
   scale_y_log10() +
   theme_linedraw() +
   theme(legend.position = "bottom") + 
-  labs(title = "Aridity vs Rainfall vs Runnoff", 
+  labs(title = "Aridity vs Rainfall vs Runoff", 
        x = "Aridity", 
        y = "Rainfall",
        color = "Mean Flow")
@@ -257,6 +259,7 @@ ggplot(camels, aes(x = aridity, y = p_mean)) +
 Excellent! Treating these three right skewed variables as log transformed, we can see a more evenly spread relationship between aridity, rainfall, and mean flow. This is a good sign for building a model to predict mean flow using aridity and rainfall.
 
 # Model Building
+
 ##splitting the data
 
 First, we set a seed for reproducabilty, then transform the q_mean column to a log scale. Remember it is error prone to apply transformations to the outcome variable within a recipe. So, we’ll do it a prioi.
@@ -280,8 +283,7 @@ camels_test  <- testing(camels_split)
 camels_cv <- vfold_cv(camels_train, v = 10)
 ```
 
-  ## Preprocessor: recipe
-In lecture, we have focused on using formulas as a workflow preprocessor. Separately we have used the recipe function to define a series of data preprocessing steps. Here, we are going to use the recipe function to define a series of data preprocessing steps.
+\## Preprocessor: recipe In lecture, we have focused on using formulas as a workflow preprocessor. Separately we have used the recipe function to define a series of data preprocessing steps. Here, we are going to use the recipe function to define a series of data preprocessing steps.
 
 We learned quite a lot about the data in the visual EDA. We know that the q_mean, aridity and p_mean columns are right skewed and can be helped by log transformations. We also know that the relationship between aridity and p_mean is non-linear and can be helped by adding an interaction term to the model. To implement these, lets build a recipe!
 
@@ -294,9 +296,11 @@ rec <-  recipe(logQmean ~ aridity + p_mean, data = camels_train) %>%
   step_interact(terms = ~ aridity:p_mean) |> 
   # Drop any rows with missing values in the pred
   step_naomit(all_predictors(), all_outcomes())
+
 ```
 
 ## Naive base lm approach
+
 Ok, to start, lets do what we are comfortable with … fitting a linear model to the data. First, we use prep and bake on the training data to apply the recipe. Then, we fit a linear model to the data.
 
 ```{r, echo = TRUE}
@@ -316,6 +320,7 @@ summary(lm_base)
 summary(lm(logQmean ~ aridity + p_mean + aridity_x_p_mean, data = baked_data))
 
 ```
+
 ## Where things get a little messy…
 
 Ok so now we have our trained model lm_base and want to validate it on the test data.
@@ -324,10 +329,10 @@ Remember a models ability to predict on new data is the most important part of t
 
 We have to be careful about how we do this with the base R approach:
 
-*Don't use augment directly on the test data before preprocessing has been applied to the data, otherwise the values it will add to the data will be incorrect
-*Don't use predict on the test data before preprocessing steps have been applied to the test data
+*Don't use augment directly on the test data before preprocessing has been applied to the data, otherwise the values it will add to the data will be incorrect* Don't use predict on the test data before preprocessing steps have been applied to the test data
 
-## Correct version: prep -> bake -> predict
+## Correct version: prep -\> bake -\> predict
+
 To correctly evaluate the model on the test data, we need to apply the same preprocessing steps to the test data that we applied to the training data. We can do this using the prep and bake functions with the recipe object. This ensures the test data is transformed in the same way as the training data before making predictions.
 
 ```{r, echo = TRUE}
@@ -340,6 +345,7 @@ test_data$lm_pred <- predict(lm_base, newdata = test_data)
 ```{r, echo = TRUE}
 metrics(test_data, truth = logQmean, estimate = lm_pred)
 ```
+
 ```{r, echo = TRUE}
 ggplot(test_data, aes(x = logQmean, y = lm_pred, colour = aridity)) +
   # Apply a gradient color scale
@@ -381,6 +387,7 @@ lm_wf <- workflow() %>%
 summary(extract_fit_engine(lm_wf))$coefficients
 
 ```
+
 Lets ensure we replicated the results from the lm_base model. How do they look to you?
 
 ```{r, echo = TRUE}
@@ -388,6 +395,7 @@ Lets ensure we replicated the results from the lm_base model. How do they look t
 summary(lm_base)$coefficients
 
 ```
+
 ## Making Predictions
 
 Now that lm_wf is a workflow, data is not embedded in the model, we can use augment with the new_data argument to make predictions on the test data.
@@ -398,7 +406,9 @@ lm_data <- augment(lm_wf, new_data = camels_test)
 dim(lm_data)
 
 ```
+
 ## Model Evaluation: Statistical and Visual
+
 As with EDA, applying for graphical and statistical evaluation of the model is a key Here, we use the metrics function to extract the default metrics (rmse, rsq, mae) between the observed and predicted mean streamflow values.
 
 We then create a scatter plot of the observed vs predicted values, colored by aridity, to visualize the model performance.
@@ -417,8 +427,8 @@ ggplot(lm_data, aes(x = logQmean, y = .pred, colour = aridity)) +
 ```
 
 ## Switch it up!
-The real power of this approach is that we can easily switch out the models/recipes and see how it performs. Here, we are going to instead use a random forest model to predict mean streamflow. We define a random forest model using the rand_forest function, set the engine to ranger, and the mode to regression. We then add the recipe, fit the model, and evaluate the skill.
 
+The real power of this approach is that we can easily switch out the models/recipes and see how it performs. Here, we are going to instead use a random forest model to predict mean streamflow. We define a random forest model using the rand_forest function, set the engine to ranger, and the mode to regression. We then add the recipe, fit the model, and evaluate the skill.
 
 ```{r, echo = TRUE}
 library(baguette)
@@ -444,13 +454,14 @@ Make predictions on the test data using the augment function and the new_data ar
 rf_data <- augment(rf_wf, new_data = camels_test)
 dim(rf_data)
 ```
+
 ## Model Evaluation: statistical and visual
+
 Evaluate the model using the metrics function and create a scatter plot of the observed vs predicted values, colored by aridity.
 
 ```{r, echo = TRUE}
 metrics(rf_data, truth = logQmean, estimate = .pred)
 ```
-
 
 ```{r, echo = TRUE}
 ggplot(rf_data, aes(x = logQmean, y = .pred, colour = aridity)) +
@@ -460,6 +471,7 @@ ggplot(rf_data, aes(x = logQmean, y = .pred, colour = aridity)) +
   theme_linedraw()
 
 ```
+
 Awesome! We just set up a completely new model and were able to utilize all of the things we had done for the linear model. This is the power of the tidymodels framework!
 
 That said, we still can reduce some to the repetition. Further, we are not really able to compare these models to one another as they
@@ -479,13 +491,14 @@ autoplot(wf)
 ```{r, echo = TRUE}
 rank_results(wf, rank_metric = "rsq", select_best = TRUE)
 ```
+
 Overall it seems the random forest model is outperforming the linear model. This is not surprising given the non-linear relationship between the predictors and the outcome :)
 
 # Question 3: Your Turn! (20 points)
 
 #### Build a xgboost (engine) regression (mode) model using boost_tree
-#### Build a neural network model using the nnet engine from the baguette package using the bag_mlp function
 
+#### Build a neural network model using the nnet engine from the baguette package using the bag_mlp function
 
 ```{r, echo = TRUE}
 library(parsnip)
@@ -501,8 +514,8 @@ nnet_model <- bag_mlp() %>%
 
 ```
 
-
 #### Add this to the above workflow
+
 ```{r, echo = TRUE}
 wf <- workflow_set(list(rec), list(lm_model, rf_model, xgboost_model, nnet_model)) %>%
   workflow_map('fit_resamples', resamples = camels_cv)
@@ -513,7 +526,6 @@ autoplot(wf)
 
 #### Evaluate the model and compare it to the linear and random forest models. Of the 4 models would you move forward with?
 
-
 ```{r, echo = TRUE}
 rank_results(wf, rank_metric = "rsq", select_best = TRUE)
 ```
@@ -522,7 +534,7 @@ The xgboost model has the highest root mean squared error and the lowest r squar
 
 #### Build your own (75 points)
 
-Borrowing from the workflow presented above, build your own complete ML pipeline to predict mean streamflow using the CAMELS dataset. You can experiment with different predictors and preprocessing steps to see how they impact model performance. A successful model will have a R-squared value > 0.9. To get started, you can use the following steps as a template:
+Borrowing from the workflow presented above, build your own complete ML pipeline to predict mean streamflow using the CAMELS dataset. You can experiment with different predictors and preprocessing steps to see how they impact model performance. A successful model will have a R-squared value \> 0.9. To get started, you can use the following steps as a template:
 
 ## Data Splitting (15)
 
@@ -569,14 +581,14 @@ step_interact(terms = ~ aridity:p_mean + aridity:lai_max + p_mean:low_prec_freq 
 
 
 ```
+
 #### Describe in words why you are choosing the formula you are. Consult the downloaded PDF for the data to help you make this decision.
 
-* I chose high_prec_freq (high precipitation frequency) because it's distant enough from p_mean to be a different concept.
-* low_prec_freq will reflect droughts frequency, which will be directly related to average streamflow for at least part of the season
-* high_prec_dur will greatly weigh into average sreamflow because it describes how often events 9x the median flow occur.
-* lai_max is an ecological predictor that assumes in areas with broad leaves there is more available moisture in the environment, which should increase streamflow
-* fraction of the top 1.5m of soil marked as water- this should be positively correlated with streamflow if there is an overall higher water table
-*slope_mean should contribute to streamflow because a higher slope will increase velocity
+-   I chose high_prec_freq (high precipitation frequency) because it's distant enough from p_mean to be a different concept.
+-   low_prec_freq will reflect droughts frequency, which will be directly related to average streamflow for at least part of the season
+-   high_prec_dur will greatly weigh into average sreamflow because it describes how often events 9x the median flow occur.
+-   lai_max is an ecological predictor that assumes in areas with broad leaves there is more available moisture in the environment, which should increase streamflow
+-   fraction of the top 1.5m of soil marked as water- this should be positively correlated with streamflow if there is an overall higher water table \*slope_mean should contribute to streamflow because a higher slope will increase velocity
 
 Since there are so many terms, I am not going to try to visualize all of them. I will run the model and see if it works. I am curious about which terms interact though, so I think I'll make a correlation table.
 
@@ -587,7 +599,6 @@ camels |>
   cor()
 
 ```
-
 
 #### Define 3 models (25)
 
@@ -603,8 +614,8 @@ rf_model <- rand_forest() %>%
 
 ```
 
-
 #### workflow set ()
+
 ```{r, echo = TRUE}
 wf2 <- workflow_set(list(rec2), list(lm_model, rf_model, nnet_model, xgboost_model)) %>%
   workflow_map('fit_resamples', resamples = camels_cv2) 
@@ -613,6 +624,7 @@ autoplot(wf2)
 
 rank_results(wf2, rank_metric = "rsq", select_best = TRUE)
 ```
+
 The random forest did the best with an r squared of.89, followed by rand_forest at .88, according to the autoplot. I think these tree-based models did better because there wasn't a lot of data to go by, allowing for more accurate modeling with decision trees. Boost_tree builds sequentially, while random forests build parallel. The sequential building was slightly better.
 
 ## Extact and Evaluate
@@ -620,7 +632,9 @@ The random forest did the best with an r squared of.89, followed by rand_forest 
 Now that you found your favorite model, lets see how it does on the test data!
 
 #### Build a workflow (not workflow set) with your favorite model, recipe, and training data
+
 #### Use fit to fit all training data to the model
+
 ```{r, echo = TRUE}
 randflow <- workflow() %>%
   # Add the recipe
@@ -632,6 +646,7 @@ randflow <- workflow() %>%
 ```
 
 #### Use augment to make predictions on the test data
+
 ```{r, echo = TRUE}
 randflow_data <- augment(randflow, new_data = camels_test2)
 dim(randflow_data)
@@ -639,6 +654,7 @@ dim(randflow_data)
 ```
 
 #### Create a plot of the observed vs predicted values with clear title, axis labels, and a compelling color scale
+
 ```{r, echo = TRUE}
 ggplot(randflow_data, aes(x = logQmean, y = .pred)) +
   geom_point() +
@@ -652,8 +668,6 @@ ggplot(randflow_data, aes(x = logQmean, y = .pred)) +
 
 ```
 
-
 #### Describe what you think of the results!
 
-The line of best fit is much more accurate at higher log streamflow, but at lower streamflow the values are more spread out. It appears as though since the R^2 converges, there might be more interacting variables I wasn't catching at first. 
-
+The line of best fit is much more accurate at higher log streamflow, but at lower streamflow the values are more spread out. It appears as though since the R\^2 converges, there might be more interacting variables I wasn't catching at first.

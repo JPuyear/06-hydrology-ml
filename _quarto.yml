@@ -1,6 +1,7 @@
-project: 
+project:
+  title: "06-hydrology"
+  output-dir: docs
   type: website
-output-directory: docs
 format:
   html:
     self-contained: true

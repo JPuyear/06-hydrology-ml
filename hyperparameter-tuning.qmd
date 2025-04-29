@@ -1,0 +1,357 @@
+---
+title: "Machine Learning Pipline for Regression"
+subtitle: "CAMELS hydrological data"
+date: "2025-04-18"
+author: 
+  name: Josh Puyear
+  email: "puyearjosh@gmail.com" 
+project:
+ output-dir: docs
+format: html
+execute:
+  echo: true
+---
+
+```{r, echo = TRUE}
+library(tidyverse)
+library(tidymodels)
+```
+
+libraries for data reading
+```{r, echo = TRUE}
+library(tidyverse)
+library(tidymodels)
+library(powerjoin)
+library(glue)
+library(vip)
+library(baguette)
+library(visdat)
+library(ggpubr)
+library(skimr)
+library(broom)
+
+```
+
+Data download
+```{r, echo = TRUE}
+root  <- 'https://gdex.ucar.edu/dataset/camels/file'
+```
+
+PDF of Data Documentation
+```{r, echo = TRUE}
+download.file('https://gdex.ucar.edu/dataset/camels/file/camels_attributes_v2.0.pdf', 
+              'data/camels_attributes_v2.0.pdf')
+```
+
+Basin Characteristics
+```{r, echo = TRUE}
+types <- c("clim", "geol", "soil", "topo", "vege", "hydro")
+
+```
+
+Constructing URLS with Glue
+```{r, echo = TRUE}
+# Where the files live online ...
+remote_files  <- glue('{root}/camels_{types}.txt')
+# where we want to download the data ...
+local_files   <- glue('data/camels_{types}.txt')
+```
+
+Important: Downloading the Data with purrr walk2
+```{r, echo = TRUE}
+walk2(remote_files, local_files, download.file, quiet = TRUE)
+```
+
+Finally: Mapping the data to the local_files list with map and read_delim
+```{r, echo = TRUE}
+# Read and merge data
+camels <- map(local_files, read_delim, show_col_types = FALSE) 
+```
+
+Performing a power_full_join to merge all tables by guage_id column
+```{r, echo = TRUE}
+camels <- power_full_join(camels, by = 'gauge_id')
+```
+
+Exploratory Data Analysis: EDA Steps
+
+## 1. Question: What are the main predictors of mean streamflow in the Poudre basin?
+## 2.Data have already been read in
+
+## 3. Summarizing the Data
+
+### Basic Attributes with Skim
+```{r, echo = TRUE}
+skim(camels)
+```
+52/58 cholumns are numeric and there are 671 total observations, well within the range for visdat. Skim is useful if we're concered about the size of a dataset
+
+### Visualization
+```{r, echo = TRUE}
+vis_dat(camels)
+```
+Most of the missing values come from geol_2nd_class and root_depth_99, which we don't really care about for streamflow. Looks like a pretty complete dataset! 
+
+### Data Summary
+
+```{r, echo = TRUE}
+summary(camels)
+```
+
+Since the median mean streamflow (q_mean) is lower than the mean streamflow, there are probably spikes of much higher streamflow interspersed with longer periods of low flow. The range of mean streamflow is between .004 mm/day (basically nothing) and 9.68mm/day. Mean precipitation p_mean is close to the median, at 3.25 and 3.22, respectively. The minimum is .6446 while the maximum is 8.94. These ranges all seem reasonable.
+
+# cleaning the data with dplyr, etc
+```{r, echo = TRUE}
+library(patchwork)
+
+gghistogram(camels$q_mean)
+
+gghistogram(camels$p_mean)
+
+#would log transformation homogenize log p mean, which has a long tail?
+#I will use step_log for any predictors that need to be logged. This will be tested with the shapiro test, which looks for normal distribution
+
+#How can a table of shapiro test results be made?
+shapiro.test(camels$q_mean)
+
+
+#to see how the variables relate, find the cor test you did in lab6
+```
+## Question: How do I automate each shapiro test so that all the variables are in the same table?
+
+```{r, echo = TRUE}
+shapiro.test(camels$aridity)
+```
+
+```{r, echo = TRUE}
+shapiro.test(camels$p_mean)
+```
+
+```{r, echo = TRUE}
+shapiro.test(camels$high_prec_freq)
+```
+
+```{r, echo = TRUE}
+shapiro.test(camels$low_prec_freq)
+```
+
+```{r, echo = TRUE}
+shapiro.test(camels$high_prec_dur)
+```
+
+```{r, echo = TRUE}
+shapiro.test(camels$lai_max)
+```
+
+```{r, echo = TRUE}
+shapiro.test(camels$water_frac)
+```
+
+```{r, echo = TRUE}
+shapiro.test(camels$slope_mean)
+```
+### Conclusion: None of them are normally distributed. Now, let's test the logged version of each variable.
+
+```{r, echo = TRUE}
+camelog <- camels %>% 
+  mutate(logarid = log(aridity),
+         logp_mean = log(p_mean),
+         logprecfreq = log(high_prec_freq),
+         logprecdur = log(high_prec_dur),
+         loglowprecfreq = log(low_prec_freq),
+         loglaimax = log(lai_max),
+         logwaterfrac = log(water_frac),
+         logslopemean = log(slope_mean)) %>% 
+  select(!c(aridity, p_mean, high_prec_freq, high_prec_dur, low_prec_freq, lai_max, water_frac, slope_mean, p_seasonality, frac_snow, high_prec_timing, low_prec_dur, geol_1st_class, glim_1st_class_frac, geol_2nd_class, glim_2nd_class_frac, carbonate_rocks_frac, geol_porostiy, geol_permeability, soil_depth_pelletier, soil_depth_statsgo, soil_porosity, soil_conductivity, max_water_content, sand_frac, silt_frac, clay_frac, organic_frac, other_frac, lai_diff, gvf_max, gvf_diff, dom_land_cover_frac, dom_land_cover, root_depth_50, root_depth_99, q_mean, runoff_ratio, slope_fdc, baseflow_index, stream_elas, q5, q95, high_q_freq, high_q_dur, low_q_dur, zero_q_freq, hfd_mean))
+
+
+```
+
+#### Checking normality in logged variables
+
+```{r, echo = TRUE}
+shapiro.test(camelog$logarid)
+
+gghistogram(camelog$logarid)
+
+
+```
+
+```{r, echo = TRUE}
+shapiro.test(camelog$logp_mean)
+
+gghistogram(camelog$logp_mean)
+```
+
+```{r, echo = TRUE}
+shapiro.test(camelog$logprecfreq)
+
+gghistogram(camelog$logprecfreq)
+```
+
+```{r, echo = TRUE}
+shapiro.test(camelog$logprecdur)
+
+gghistogram(camelog$logprecdur)
+```
+
+```{r, echo = TRUE}
+shapiro.test(camelog$loglowprecfreq)
+gghistogram(camelog$loglowprecfreq)
+```
+
+```{r, echo = TRUE}
+shapiro.test(camelog$loglaimax)
+
+gghistogram(camelog$loglaimax)
+
+gghistogram(camels$lai_max)
+
+#this one doesn't really make a difference whether or not I log it; it isn't normal either way
+```
+
+```{r, echo = TRUE}
+shapiro.test(camelog$logwaterfrac)
+```
+
+```{r, echo = TRUE}
+shapiro.test(camelog$logslopemean)
+```
+
+
+## The recipe after checking all predictor variables
+
+```{r, echo = TRUE}
+rec2 <-  recipe(logQmean ~ aridity + p_mean + high_prec_freq + low_prec_freq + high_prec_dur + lai_max + water_frac + slope_mean, data = camels_train) %>%
+  # Log transform the predictor variables (aridity and p_mean)
+  #step_log(all_predictors()) %>%
+  # Add an interaction term between aridity and p_mean
+step_interact(terms = ~ aridity:p_mean + aridity:lai_max + p_mean:low_prec_freq + high_prec_freq:low_prec_freq + low_prec_freq:aridity) |> 
+  # Drop any rows with missing values in the pred
+  step_naomit(all_predictors(), all_outcomes())
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+Mean precip and mean streamflow are not normally distributed.
+
+Not sure what the goal of this modelbuilding is, but data are cleaned according to instructions. We could probably get rid of some comumns later, but we'll keep them for now.
+
+The goal of the modelbuilding is still to predict q_mean, so how is this different from lab 6?
+```{r, echo = TRUE}
+#broom$augment?
+#might need to select out some columns based on modelbuilding requirements
+
+```
+
+```{r, echo = TRUE}
+set.seed(225)
+
+camels_split <- initial_split(camels, prop = 0.8)
+camels_train <- training(camels_split)
+camels_test  <- testing(camels_split)
+
+camels_cv <- vfold_cv(camels_train, v = 10)
+
+```
+
+```{r, echo = TRUE}
+rec2 <-  recipe(logQmean ~ aridity + p_mean + high_prec_freq + low_prec_freq + high_prec_dur + lai_max + water_frac + slope_mean, data = camels_train) %>%
+  # Log transform the predictor variables (aridity and p_mean)
+  #step_log(all_predictors()) %>%
+  # Add an interaction term between aridity and p_mean
+step_interact(terms = ~ aridity:p_mean + aridity:lai_max + p_mean:low_prec_freq + high_prec_freq:low_prec_freq + low_prec_freq:aridity) |> 
+  # Drop any rows with missing values in the pred
+  step_naomit(all_predictors(), all_outcomes())
+
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
+
+```{r, echo = TRUE}
+
+```
