@@ -352,6 +352,18 @@ rf_model_tune <- rand_forest(
 
 ```
 
+## Updating the worflow
+
+```{r, echo = TRUE}
+rf_wf3_tune <- workflow() %>%
+  # Add the recipe
+  add_recipe(rec3) %>%
+  # Add the model
+  add_model(rf_model_tune)
+
+```
+
+
 ## Updating the Dials
 
 ```{r, echo = TRUE}
@@ -361,6 +373,7 @@ dials_params <- extract_parameter_set_dials(rf_wf3_tune) %>%
     trees = trees(range = c(200, 800)),
     min_n = min_n(range = c(5, 15))
   )
+
 ```
 
 ## Updating Latin Hypercube Grid
