@@ -57,21 +57,19 @@ The data we are going to downloaded are the basin level summaries. For example, 
 The CAMELS dataset is hosted by NCAR and can be accessed here under the “Individual Files” section. The root URL for all data seen on the “Individual Files” page is:
 
 ```{r, echo = TRUE}
-root  <- 'https://gdex.ucar.edu/dataset/camels/file'
+#root  <- 'https://gdex.ucar.edu/dataset/camels/file'
 ```
 
 Near the bottom of that page, there are many .txt files that contain the data we want. Some hold climate data for each basin, some hold geology data, some hold soil data, etc. There is also a PDF with descriptions of the columns in each file. We are going to download all of the .txt files and the PDF.
 
 ## Getting the documentation PDF
-
 ```{r, echo = TRUE}
-file <- 'https://gdex.ucar.edu/dataset/camels/file/camels_attributes_v2.0.pdf'
-
-download.file(file, "C:/Users/Joshua Puyear/Documents/csu-undergrad/ess-330-joshp-2025/github/ess-330-labs/06-hydrology-ml/docs/camels_attributes.pdf", mode = "wb")
-
+#file <- 'https://gdex.ucar.edu/dataset/camels/file/camels_attributes_v2.0.pdf'
+#download.file(file, "C:/Users/Joshua Puyear/Documents/csu-undergrad/ess-330-joshp-2025/github/ess-330-labs/06-hydrology-ml/docs/camels_attributes.pdf", mode = "wb")
 ```
-
 ## Getting Basin Characteristics
+
+### Warning: You can no longer download the data from the website
 
 The glue package provides an efficient way to interpolate and manipulate strings. It is particularly useful for dynamically constructing text, formatting outputs, and embedding R expressions within strings.
 
@@ -80,30 +78,29 @@ Now we want to download the .txt files that store the actual data documented in 
 #### a. Lets create a vector storing the data types/file names we want to download:
 
 ```{r, echo = TRUE}
-types <- c("clim", "geol", "soil", "topo", "vege", "hydro")
+#types <- c("clim", "geol", "soil", "topo", "vege", "hydro")
 ```
 
 #### b. Using glue, we can construct the needed URLs and file names for the data we want to download:
 
 ```{r, echo = TRUE}
 # Where the files live online ...
-remote_files  <- glue('{root}/camels_{types}.txt')
+#remote_files  <- glue('{root}/camels_{types}.txt')
 # where we want to download the data ...
-local_files   <- glue('data/camels_{types}.txt')
+#local_files   <- glue('data/camels_{types}.txt')
 ```
 
 #### c. Now we can download the data: walk2 comes from the purrr package and is used to apply a function to multiple arguments in parallel (much like map2 works over paired lists). Here, we are asking walk2 to pass the first element of remote_files and the first element of local_files to the download.file function to download the data, and setting quiet = TRUE to suppress output. The process is then iterated for the second element of each vector, and so on.
 
 ```{r, echo = TRUE}
-walk2(remote_files, local_files, download.file, quiet = TRUE)
-
+#walk2(remote_files, local_files, download.file, quiet = TRUE)
 ```
 
 #### d. Once downloaded, the data can be read into R using readr::read_delim(), again instead of applying this to each file individually, we can use map to apply the function to each element of the local_files list.
 
 ```{r, echo = TRUE}
 # Read and merge data
-camels <- map(local_files, read_delim, show_col_types = FALSE) 
+#camels <- map(local_files, read_delim, show_col_types = FALSE) 
 ```
 
 #### e. This gives us a list of data.frames, one for each file that we want to merge into a single table. So far in class we have focused on \*\_join functions to merge data based on a primary and foreign key relationship.
@@ -113,9 +110,14 @@ In this current list, we have \>2 tables, but, have a shared column called gauge
 In this case, we are join to merge every data.frame in the list (n = 6) by the shared gauge_id column. Since we want to keep all data, we want a full join.
 
 ```{r, echo = TRUE}
-camels <- power_full_join(camels ,by = 'gauge_id')
+#camels <- power_full_join(camels, by = 'gauge_id')
 ```
 
+### ***TAs: The data are no longer accessible but luckily I had already downloaded and power_full_joined the data***
+
+```{r, echo = TRUE}
+camels <- read_csv("C:/Users/Joshua Puyear/Documents/csu-undergrad/ess-330-joshp-2025/github/ess-330-labs/06-hydrology-ml/data/camels.csv")
+```
 # Question 1: Your Turn (10 points)
 
 ## Exploratory Data Analysis
@@ -132,7 +134,6 @@ ggplot(data = camels, aes(x = gauge_lon, y = gauge_lat)) +
     title = "Mean Streamflow Across the US",
     color = "Mean Streamflow q"
   )
-
 ```
 
 #### Q1 Answers
@@ -455,7 +456,7 @@ rf_wf <- workflow() %>%
   # Add the model
   add_model(rf_model) %>%
   # Fit the model
-  fit(data = camels_train) 
+  fit(data = camels_train)
 
 ```
 
