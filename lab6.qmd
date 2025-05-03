@@ -12,19 +12,6 @@ execute:
   echo: true
 ---
 
-title: 'Lab 6: Machine Learning in Hydrology'
-subtitle: 'Using Tidymodels & CAMELS Data'
-date: "2025-04-10"
-author: 
-  name: Josh Puyear
-  email: "puyearjosh@gmail.com" 
-project:
- output-dir: docs
-format: html
-execute:
-  echo: true
----
-
 tidymodels is an R framework designed for machine learning and statistical modeling. Built on the principles of the tidyverse, tidymodels provides a consistent and modular approach to tasks like data preprocessing, model training, evaluation, and validation. By leveraging the strengths of packages such as recipes, parsnip, and yardstick, tidymodels streamlines the modeling workflow, making it easier to experiment with different models while maintaining reproducibility and interpretability.
 
 loading packages for analysis

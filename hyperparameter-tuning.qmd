@@ -297,12 +297,10 @@ Hyperparameters can be tuned to optimize the model’s predictive power.
 ```{r, echo = TRUE}
 # I'm sticking with ranger and regression
 
-#tune was removed to set better metrics for tuning.
 rf_model_tune <- rand_forest(
   mtry = tune(),
   trees = tune(), 
   min_n = tune()
-  #	Minimum # of data points in a node before it can be split
 ) %>%
   set_engine("ranger", importance = "impurity", seed = 123) %>%
   set_mode("regression")
@@ -311,10 +309,8 @@ rf_model_tune <- rand_forest(
 
 ## Create a workflow from chosen model
 ```{r, echo = TRUE}
-rf_wf3 <- workflow() %>%
-  # Add the recipe
+rf_wf3_tune <- workflow() %>%
   add_recipe(rec3) %>%
-  # Add the model
   add_model(rf_model_tune)
 
 ```
@@ -322,179 +318,122 @@ rf_wf3 <- workflow() %>%
 ## Check Tunable Values/Ranges
 
 ```{r, echo = TRUE}
-dials <- extract_parameter_set_dials(rf_wf3) %>% 
-  finalize(x = camels_train3 %>% select(-q_mean)) 
-
-dials$object
-
-```
-
-## Updating the Model
-```{r, echo = TRUE}
-# Updating the Model
-
-library(tidymodels)
-library(dials)
-
-rf_model_tune <- rand_forest(
-  mtry = tune(),
-  trees = tune(), 
-  min_n = tune()
-) %>%
-  set_engine("ranger", importance = "impurity", seed = 123) %>%
-  set_mode("regression") %>%
-  # Update the default parameter ranges:
-  update(
-    mtry = mtry(range = c(1, 10)),       # Custom range for mtry
-    trees = trees(range = c(200, 800)),  # Custom range for number of trees
-    min_n = min_n(range = c(5, 15))      # Custom range for minimum node size
-  )
-
-```
-
-## Updating the worflow
-
-```{r, echo = TRUE}
-rf_wf3_tune <- workflow() %>%
-  # Add the recipe
-  add_recipe(rec3) %>%
-  # Add the model
-  add_model(rf_model_tune)
-
-```
-
-
-## Updating the Dials
-
-```{r, echo = TRUE}
 dials_params <- extract_parameter_set_dials(rf_wf3_tune) %>% 
   update(
-    mtry = mtry(range = c(1, 13)),  # Now properly constrained to 13
+    mtry = mtry(range = c(1, 10)),
     trees = trees(range = c(200, 800)),
     min_n = min_n(range = c(5, 15))
-  )
+  ) %>%
+  finalize(x = camels_train3 %>% select(-q_mean))
 
+# Verify parameters
+dials_params$object
 ```
-
-## Updating Latin Hypercube Grid
+```{r, echo = TRUE}
+print(dials_params)
+```
 
 ```{r, echo = TRUE}
 set.seed(123)
-my.grid <- grid_latin_hypercube(
-  dials_params,  # Using the UPDATED parameters
+
+my.grid <- grid_latin_hypercube(dials_params,
   size = 20
 )
+
+print(my.grid)
 ```
 
 ## Tuning the Model
 
 ```{r, echo = TRUE}
-model_params <-  tune_grid(
-    rf_wf3_tune,
-    resamples = camels_cv3,
-    grid = my.grid,
-    metrics = metric_set(rmse, rsq, mae),
-    control = control_grid(save_pred = TRUE)
-  )
-
-autoplot(model_params)
-```
-
-```{r, echo = TRUE}
-n_predictors <- ncol(camels_train3) - 1  # Exclude outcome variable
-print(paste("Number of predictors:", n_predictors))
-print(my.grid)
-```
-
-```{r, echo = TRUE}
-full_params <- tune_grid(
-  rf_wf3_tune,
-  resamples = camels_cv3,
-  grid = my.grid,
-  metrics = metric_set(rmse, rsq, mae),
+model_params <- tune_grid(
+  rf_wf3_tune,          # Your tuned workflow
+  resamples = camels_cv3,  # Your cross-validation folds (previously created)
+  grid = my.grid,       # Your parameter grid
+  metrics = metric_set(rmse, rsq, mae),  # Evaluation metrics
   control = control_grid(
-    save_pred = TRUE,
-    allow_par = FALSE,
-    verbose = TRUE
+    save_pred = TRUE,   # Save predictions for analysis
+    verbose = TRUE      # Show progress
   )
 )
-```
-```{r, echo = TRUE}
-autoplot(full_params)
+
 ```
 
-## Describe what you see:
+## Autoplotting
+
+```{r, echo = TRUE}
+autoplot_results <- autoplot(model_params) +
+  labs(title = "Random Forest Hyperparameter Tuning Results",
+       subtitle = "Performance across parameter combinations") +
+  theme_minimal()
+
+print(autoplot_results)
+
+```
+Mean average error does not show a clear relationship with randomly selected predictors, number of trees, or minimal node size. Root mean squared error increases with randomly selected predictors, but there is no effect of rmse of more trees or of an increase in minimal node size. R-squared decreases as randomly selected predictors increase, but the effect on rsq is not clear with increasing tree size or node size. Main takeaway is the fewer randomly selected trees, the better, but the other parameters don't matter as much. 
 - As the number of randomly selected predictors increases, r squared decreasees and the error increases. Thus, it's better to have fewer randomly selected predictors for accuracy. Mean average error stays about the same except for an outlier at the very lowest amount of predictors.
 - As the number of trees increases, there is no change in rmse or rsq. At the lowest and highest ends, it looks like the number of trees is random. Mean average error doesn't change with this number of trees either.
 - Minimal node size stays has no effect on mae, appears to have a weak negative correlation with rmse, and no correlation with rsq.
 
 
-# Check the skill of the tuned model
-``` {r, echo = TRUE}
-full_params %>% 
-  collect_metrics() %>%
-  filter(.metric == "rsq") %>%
-  slice_max(n = 5, order_by = mean)
-
-full_params %>% 
+### Collecting Metrics
+```{r, echo = TRUE}
+model_params %>% 
   collect_metrics() %>% 
-  filter(.metric == "rmse") %>% 
-  slice_min(n = 5, order_by = mean)
-
-full_params %>% 
-  collect_metrics() %>% 
-  filter(.metric == "rmse") %>% 
-  slice_max(n = 5, order_by = mean)
-
-full_params %>% 
-  collect_metrics() %>% 
-  filter(.metric == "mae") %>% 
-  slice_min(n = 5, order_by = mean)
-
-full_params %>% 
-  collect_metrics() %>% 
-  filter(.metric == "mae") %>% 
-  slice_max(n = 5, order_by = mean)
+  filter(.metric == "rsq") %>% 
+  slice_max(mean, n = 5)
 
 ```
 
-### Describe what you see:
-
-The combination with the highest r-squared is .92. Its min_n is 6 and it has 376 trees, which is by no means the most trees or the most min_n. The next four model combinations also have a mean of .92 rsq. The range of rmse is from .41 to .43.  The range of mae is .22 to .25. The lowest rmse has 396 trees and a min_n of 12. In this situation, I can see how it's helpful to graph all of these metrics to look for trends. The autoplot seems more helpful in this situaiton, while the table is for finding a specific combo that worked best.
-
-### Using select_best()
-
-``` {r, echo = TRUE}
-show_best(full_params, metric = "mae", n = 5)
+Showing the Best Outcome
+```{r, echo = TRUE}
+# Show best performing combinations
+show_best(model_params, metric = "rmse", n = 5)
+show_best(model_params, metric = "rsq", n = 5)  
 ```
+Just like the autoplot showed, a lower mtry has a higher rsq and lower rmse. The min_n is pretty random, as is the number of trees, but the top value of mtry = 3, trees = 592, and min_n = 14 is the same for metric = rmse and metric = rsq.
 
-### Please interpret the results of the first row of show_best(). What do you see? What hyperparameter set is best for this model, based on MAE?
-The best model, measured by minimal mae, had six randomly sampled errors, 227 trees, and seven samples. 
+### Best Parameters
+```{r, echo = TRUE}
 
-## select_best hyperparameter
-``` {r, echo = TRUE}
-hp_best <- select_best(full_params, metric = "mae")
-```
-## Finalizing the workflow now that we have the best hyperparameter specs
-``` {r, echo = TRUE}
-finalized_workflow <- finalize_workflow(rf_wf3_tune, select_best(full_params, metric = "mae"))
+hp_best <- select_best(model_params)
 
 ```
 
-## Final Fitting
-``` {r, echo = TRUE}
-final_fit <- last_fit(finalized_workflow, camels_split3) 
+### Finalizing Workflow
+```{r, echo = TRUE}
+final_wf <- finalize_workflow(rf_wf3_tune, hp_best)
 
-collect_metrics(final_fit)
-                       
 ```
+
+### Fitting Finalized Workflow to Data Split
+```{r, echo = TRUE}
+
+lastft <- last_fit(final_wf, camels_split3)
+```
+Checking Performance of last model
+```{r, echo = TRUE}
+
+collect_metrics(lastft)
+
+```
+The performance is .03 higher in rsq and .04 lower in rmse, so better overall than the training data alone. At an rsq of .95, this means 95 percent of the variability can be explained by the model. According to the RMSE, predictions are off by .38 units on average, whcih could be bad if the data aren't fractional, since a high rmse makes models less accurate.
+
+
+### Collecting Predictions 
+
+```{r, echo = TRUE}
+predictions <- collect_predictions(lastft)
+
+```
+
+
 ### Interpret these results. How does the final model perform on the test data? Is it better or worse than the training data? Use your knowledge of the regression based metrics to describe the results.
 
 This is actually really good  because we have a lower rmse than with the testing data alone and the rsq is .959, better than when we collected metrics on the tuned model. .959 r-squared means 95.9 percent of the variability is explained by the model. It captures almost all of the variability influencing streamflow. there might be some overfitting, which could be verified by giving the model more data.  
 
 ## Ggplotting Predicted vs actual values
 ```{r, echo = TRUE}
-predictions <- collect_predictions(final_fit)
 
 predictions %>% 
 ggplot(aes(x = .pred, y = q_mean)) +
@@ -508,10 +447,9 @@ ggplot(aes(x = .pred, y = q_mean)) +
 ```
 
 ```{r, echo = TRUE}
-final_final_fit <- fit(finalized_workflow, camels)
+finalft <- fit(final_wf, camels)
 
-
-final_final_augment <- augment(final_final_fit, camels) %>% 
+final_augment <- augment(finalft, camels) %>% 
   select(.pred, q_mean, gauge_lon, gauge_lat) %>% 
   mutate(res = (.pred - q_mean)^2)
 
@@ -531,7 +469,7 @@ centered_theme <- function() {
 }
 
 # Predicted Streamflow Map
-predmap <- ggplot(data = final_final_augment, aes(x = gauge_lon, y = gauge_lat)) +
+predmap <- ggplot(data = final_augment, aes(x = gauge_lon, y = gauge_lat)) +
   borders("state", colour = "gray50") +
   geom_point(aes(color = .pred)) +
   scale_color_gradient(low = "pink", high = "dodgerblue", name = "Predicted Flow") +
@@ -539,7 +477,7 @@ predmap <- ggplot(data = final_final_augment, aes(x = gauge_lon, y = gauge_lat))
   labs(title = "Predicted Streamflow")
 
 # Residuals Map
-resid <- ggplot(data = final_final_augment, aes(x = gauge_lon, y = gauge_lat)) +
+resid <- ggplot(data = final_augment, aes(x = gauge_lon, y = gauge_lat)) +
   borders("state", colour = "gray50") +
   geom_point(aes(color = res)) +
   scale_color_gradient2(
