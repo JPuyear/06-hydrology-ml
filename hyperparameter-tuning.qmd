@@ -345,7 +345,7 @@ print(my.grid)
 
 ## Tuning the Model
 
-```{r, echo = TRUE}
+```{r, echo = TRUE, results = 'hide'}
 model_params <- tune_grid(
   rf_wf3_tune,          # Your tuned workflow
   resamples = camels_cv3,  # Your cross-validation folds (previously created)
